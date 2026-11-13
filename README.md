@@ -1,6 +1,6 @@
 # Chaos-Engine
 
-[![codecov](https://codecov.io/gh/La-BeTe/Chaos-Engine/branch/master/graph/badge.svg?token=npPIcAYD8F)](https://codecov.io/gh/La-BeTe/Chaos-Engine)
+[![codecov](https://codecov.io/gh/la-bete/chaos-engine/branch/master/graph/badge.svg?token=npPIcAYD8F)](https://codecov.io/gh/la-bete/chaos-engine)
 
 A small edge-case testing library and CLI for JavaScript functions. You give it one example of each argument, and it calls the function again and again with each argument swapped for awkward values of the same type (`NaN`, `Infinity`, empty and whitespace strings, `null`, `undefined`, wrong types), then reports what each call returned, what threw, and how long it took. It is a quick way to see how a function behaves at the edges without writing those cases by hand.
 

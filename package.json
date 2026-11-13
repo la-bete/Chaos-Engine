@@ -23,7 +23,7 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/La-BeTe/Chaos-Engine.git"
+        "url": "git+https://github.com/la-bete/chaos-engine.git"
     },
     "keywords": [
         "destructive",
@@ -38,9 +38,9 @@
     "author": "La-BeTe",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/La-BeTe/Chaos-Engine/issues"
+        "url": "https://github.com/la-bete/chaos-engine/issues"
     },
-    "homepage": "https://github.com/La-BeTe/Chaos-Engine#readme",
+    "homepage": "https://github.com/la-bete/chaos-engine#readme",
     "files": [
         "lib"
     ],
