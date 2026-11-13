@@ -56,4 +56,24 @@ describe("Generate Args", () => {
                 destructiveArgs.generals.length * 4
         );
     });
+
+    it("should pass userDestructives through to union members and nested properties", () => {
+        const custom = { string: ["CUSTOM"], number: ["NUM"] };
+        const union = generateArgs("string | number", "3", custom);
+        expect(union).toEqual(expect.arrayContaining(["CUSTOM", "NUM"]));
+
+        const nested = generateArgs(
+            { a: { b: "string" } },
+            { a: { b: "x" } },
+            custom
+        );
+        expect(nested).toContainEqual({ a: { b: "CUSTOM" } });
+
+        const customType = generateArgs(
+            { id: "uuid" },
+            { id: "x" },
+            { uuid: ["not-a-uuid"] }
+        );
+        expect(customType).toContainEqual({ id: "not-a-uuid" });
+    });
 });

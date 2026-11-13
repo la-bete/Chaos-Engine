@@ -24,7 +24,7 @@ describe("Chaos Engine", () => {
 
     it("should accept only functions and return a new Chaos Engine", () => {
         //@ts-ignore
-        expect(() => chaos("")).toThrowError(ChaosError);
+        expect(() => chaos("")).toThrow(ChaosError);
         //@ts-ignore
         expect(() => chaos(1)).toThrow(ChaosError);
         expect(() => chaos(sum)).not.toThrow();

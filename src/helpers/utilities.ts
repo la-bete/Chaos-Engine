@@ -10,6 +10,9 @@ export interface Destructives {
     generals: unknown[];
 }
 
+/** Custom destructive values, keyed by type name. */
+export type UserDestructives = { [type: string]: unknown[] };
+
 export const destructiveArgs: Destructives = {
     string: ["", "   ", "13467", []],
 
@@ -29,10 +32,18 @@ export const destructiveArgs: Destructives = {
     generals: [null, undefined]
 };
 
-export function isValidObject(obj: unknown) {
-    return !!(
+export function isValidObject(obj: unknown): obj is Record<string, unknown> {
+    return (
         typeof obj === "object" &&
-        obj &&
-        obj.constructor.name === "Object"
+        obj !== null &&
+        obj.constructor?.name === "Object"
+    );
+}
+
+export function isThenable(value: unknown): value is PromiseLike<unknown> {
+    return (
+        (typeof value === "object" || typeof value === "function") &&
+        value !== null &&
+        typeof (value as { then?: unknown }).then === "function"
     );
 }

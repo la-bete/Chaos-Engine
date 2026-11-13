@@ -20,7 +20,7 @@ chaos({ fn: sum, errorLevel: 1, destructives: { number: [0] } });
 
 ### setFn
 
-The `setFn` method can be used to set the `testFn` associated with this Engine instance. It also calls the `refresh` method internally. You can also get the current `testFn` by accessing the `fn` property on the instance.
+The `setFn` method can be used to set the `testFn` associated with this Engine instance. It also calls the `refresh` method internally. It does not call `testFn`; nothing runs until `run` or `runAsync`. You can also get the current `testFn` by accessing the `fn` property on the instance.
 
 ```javascript
 const chaosEngine = chaos(); // chaosEngine.fn => undefined
@@ -40,7 +40,7 @@ chaosEngine.setErrorLevel({}); // Invalid errorLevel passed in, it would use the
 
 ### setDestructives
 
-The `setDestructives` method allows custom destructive arguments to be passed in, these arguments are passed into `testFn` when running tests in place of the argument examples passed to `toTake`. The inbuilt destructives are available on the `defaultDestructives` property of the instance. Custom destructives can be accessed on the `destructives` property of the instance. Custom destructives must be an object with string keys and array values. If the object passed to setDestructives has keys that are not one of `string`, `number`, `boolean`, `object` or `generals`, custom types can be simulated. The `generals` array in the `destructives` object are used for all types and are always part of the args used to call `testFn`.
+The `setDestructives` method allows custom destructive arguments to be passed in, these arguments are passed into `testFn` when running tests in place of the argument examples passed to `toTake`. The inbuilt destructives are available on the `defaultDestructives` property of the instance. Custom destructives can be accessed on the `destructives` property of the instance. Custom destructives must be an object with string keys and array values. If the object passed to setDestructives has keys that are not one of `string`, `number`, `boolean`, `object` or `generals`, custom types can be simulated. The `generals` array in the `destructives` object are used for all types and are always part of the args used to call `testFn`. Custom destructives also apply to each member of a union type and to every property of an object argument, at any depth.
 
 ```javascript
 const chaosEngine = chaos(); // chaosEngine.destructives => {}
@@ -102,15 +102,27 @@ The `toReturn` method accepts the same arguments as `toTake` method and specifie
 
 ### run
 
-The `run` method starts the process of testing and would throw an error if `toTake` had not been called initially. It returns the results of the destructive tests. You can call the `run` method after calling `toReturn` or `toTake` in order to run the tests. For asynchronous functions, use `runAsync` below. `run` hands off to `runAsync` only when the function returned a promise during the probe call that `setFn` makes (it calls the function once with no arguments), so do not rely on it for async functions.
+The `run` method starts the process of testing and would throw an error if `toTake` had not been called initially. It returns the results of the destructive tests. You can call the `run` method after calling `toReturn` or `toTake` in order to run the tests. If every call returns synchronously, `run` returns the results directly. If any call returns a promise (every call to an `async` function does), `run` returns a promise that resolves once all calls have settled; a rejected promise is recorded as an error for that call. When you know the function is async, `runAsync` below always returns a promise and is easier to type.
 
 ### runAsync
 
-The `runAsync` method starts the process of testing for asynchronous functions and would throw an error if `toTake` had not been called initially. It returns a promise that resolves to the results of the destructive tests. You can call the `runAsync` method after calling `toReturn` or `toTake` in order to run the tests.
+The `runAsync` method works like `run` but always returns a promise, whether the function is synchronous or not. It would throw an error if `toTake` had not been called initially. The promise resolves to the results of the destructive tests. You can call the `runAsync` method after calling `toReturn` or `toTake` in order to run the tests.
 
 ### refresh
 
 The `refresh` method clears and resets the ChaosEngine instance. After calling this, you have to set up the instance again. It is called by `setFn` internally, so args for one `testFn` are not carried over to the new `testFn`. Note that this also resets `errorLevel` to `0` and clears custom destructives, so call `setErrorLevel` and `setDestructives` after `setFn`.
+
+### TypeScript
+
+The package ships type definitions. Besides `chaos`, it exports the `ChaosError` class and the types `Options`, `Result`, `TestResults`, `UserDestructives` and `Engine`.
+
+```typescript
+import { chaos, type TestResults } from "@la-bete/chaos-engine";
+
+const result: TestResults = await chaos(async (n: number) => n * 2)
+    .toTake(2)
+    .runAsync();
+```
 
 ## Examples
 
@@ -148,7 +160,8 @@ chaosEngine.runAsync().then((result) => {
 
 ### Notes
 
--   The CLI also works with modules that export `async` functions.
+-   Each file must export a function, either as `module.exports = fn` or as a default export. `async` functions work too.
+-   Files run one after another. If an error is thrown (error level `0`), the run stops and `chaos` exits with code 1.
 
 ### Installation
 
@@ -183,7 +196,7 @@ The config file should export an object with fields as specified below. All fiel
 -   Each key should have an object value that specifies the inputs, output, errorLevel and destructives to run the test with.
 -   The `inputs` field is required and correlates with examples of arguments the `testFn` should take and should be an array. The `inputs` field could also be an array of arrays, each with length of `2` and the first element corresponding to the arg example, while the second element corresponds to the arg type, in the same order as passed to `toTake` or `toReturn`.
 -   The `output` specifies an example of the expected return value. It could be a single value, or an array consisting of the return example and return type.
--   The `errorLevel` specifies the `errorLevel` when running tests on that particular file, while `destructives` are custom destructives that will be used during the tests for this file if supplied.
+-   The `errorLevel` specifies the `errorLevel` when running tests on that particular file (including `0`, which overrides a global `1`), while `destructives` are custom destructives added to the global ones for this file.
 
 ### errorLevel
 
@@ -191,7 +204,7 @@ The config file should export an object with fields as specified below. All fiel
 
 ### destructives
 
--   This field also represents fallback custom destructives to be used if none is passed for a specific file. It defaults to `{}`.
+-   These custom destructives apply to every file. A file's own `destructives` are added to them, key by key. It defaults to `{}`.
 
 A typical config example can be found below:
 

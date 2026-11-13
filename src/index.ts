@@ -1,10 +1,15 @@
 import Engine from "./classes/Engine";
-import { isValidObject } from "./helpers/utilities";
+import { isValidObject, UserDestructives } from "./helpers/utilities";
 
-interface Options {
+export type { Result, TestResults } from "./classes/Engine";
+export type { UserDestructives } from "./helpers/utilities";
+export { ChaosError } from "./classes/Error";
+export type { Engine };
+
+export interface Options {
     fn: Function;
     errorLevel?: 0 | 1;
-    destructives: { [x: string]: unknown[] };
+    destructives?: UserDestructives;
 }
 
 export function chaos(

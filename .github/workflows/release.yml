@@ -1,0 +1,37 @@
+name: Release
+
+# Publishing a GitHub Release (tag vX.Y.Z) publishes that version to npm.
+# Uses npm trusted publishing: npm trusts this workflow directly, so there is no
+# npm token secret. Set up once on npmjs.com: package settings, Trusted
+# publishing, GitHub Actions, repository la-bete/chaos-engine, workflow release.yml.
+
+on:
+    release:
+        types: [published]
+
+permissions:
+    contents: read
+    id-token: write # lets npm verify this workflow (and record provenance)
+
+jobs:
+    publish:
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 24
+                  registry-url: https://registry.npmjs.org
+                  cache: npm
+            # Trusted publishing needs npm 11.5.1 or later
+            - run: npm install -g npm@^11.5.1
+            - run: npm ci
+            - name: Check the release tag matches package.json
+              run: |
+                  version="$(node -p "require('./package.json').version")"
+                  if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+                      echo "::error::Release tag $GITHUB_REF_NAME does not match package.json version $version"
+                      exit 1
+                  fi
+            # prepublishOnly builds and tests before anything is uploaded
+            - run: npm publish --access public

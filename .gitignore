@@ -104,5 +104,4 @@ dist
 .tern-port
 
 # My Additions
-package-lock.json
 lib/

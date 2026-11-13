@@ -1,4 +1,4 @@
-import ChaosEngine from "../../src/classes/Engine";
+import ChaosEngine, { TestResults } from "../../src/classes/Engine";
 import { destructiveArgs } from "../../src/helpers/utilities";
 
 function sum(a: number, b: number) {
@@ -31,7 +31,7 @@ describe("Chaos Engine", () => {
         chaosEngine.setFn(newFn);
         expect(chaosEngine.fn).toEqual(newFn);
         //@ts-ignore
-        expect(() => chaosEngine.setFn(23)).toThrowError(
+        expect(() => chaosEngine.setFn(23)).toThrow(
             "Chaos Engine expects a function argument"
         );
     });
@@ -50,12 +50,13 @@ describe("Chaos Engine", () => {
         expect(chaosEngine.destructives).toStrictEqual({});
         chaosEngine.setDestructives({ test: [1, 2, 3] });
         expect(chaosEngine.destructives).toStrictEqual({ test: [1, 2, 3] });
+        // @ts-expect-error invalid input on purpose
         chaosEngine.setDestructives(undefined);
         expect(chaosEngine.destructives).toStrictEqual({});
         expect(() =>
             //@ts-ignore
             chaosEngine.setErrorLevel(0).setDestructives(45)
-        ).toThrowError();
+        ).toThrow();
     });
 
     it("should not include the user-provided destructives if they are not valid arrays", () => {
@@ -63,10 +64,10 @@ describe("Chaos Engine", () => {
         expect(chaosEngine.destructives).toStrictEqual(customDestructives);
         //@ts-ignore
         chaosEngine.setDestructives({ test: 23 });
-        expect(chaosEngine.destructives.test).toBeUndefined;
+        expect(chaosEngine.destructives.test).toBeUndefined();
         //@ts-ignore
         chaosEngine.setDestructives({ test: "  test  " });
-        expect(chaosEngine.destructives.test).toBeUndefined;
+        expect(chaosEngine.destructives.test).toBeUndefined();
     });
 
     it("should use the default error level if an invalid number is passed in", () => {
@@ -85,7 +86,7 @@ describe("Chaos Engine", () => {
         expect(chaosEngine.errorLevel).toEqual(1);
         expect(chaosEngine.destructives).toStrictEqual(customDestructives);
         chaosEngine.refresh();
-        expect(chaosEngine.fn).toBeUndefined;
+        expect(chaosEngine.fn).toBeUndefined();
         expect(chaosEngine.errorLevel).toEqual(0);
         expect(chaosEngine.destructives).toStrictEqual({});
     });
@@ -100,7 +101,7 @@ describe("Chaos Engine", () => {
 
     it("should have a toTake method that throws if the function to be tested has not been set", () => {
         const chaosEngine = new ChaosEngine();
-        expect(() => chaosEngine.toTake(3, "number")).toThrowError(
+        expect(() => chaosEngine.toTake(3, "number")).toThrow(
             "You have to set the function before passing its arguments."
         );
         chaosEngine.setFn(sum);
@@ -202,7 +203,7 @@ describe("Chaos Engine", () => {
 
     it("should throw an error if the run method is called without calling toTake initially or passing a function to test", () => {
         const chaosEngine = new ChaosEngine(sum);
-        expect(() => chaosEngine.run()).toThrowError(
+        expect(() => chaosEngine.run()).toThrow(
             "You have to call ToTake method at least once before calling the Run method."
         );
     });
@@ -255,14 +256,14 @@ describe("Chaos Engine", () => {
     it("should not throw error if errorLevel is set to 1", () => {
         const chaosEngine = new ChaosEngine(sum, 1, customDestructives);
         //@ts-ignore
-        expect(() => chaosEngine.setFn(23)).not.toThrowError(
+        expect(() => chaosEngine.setFn(23)).not.toThrow(
             "Chaos Engine expects a function argument"
         );
     });
     it("should throw error if errorLevel is set to 0", () => {
         const chaosEngine = new ChaosEngine(sum, 0, customDestructives);
         //@ts-ignore
-        expect(() => chaosEngine.setFn(23)).toThrowError(
+        expect(() => chaosEngine.setFn(23)).toThrow(
             "Chaos Engine expects a function argument"
         );
     });
@@ -277,7 +278,7 @@ describe("Chaos Engine", () => {
         let result: any = chaosEngine.toTake(null).run();
         expect(result).toHaveProperty("status", "success");
         expect(
-            result.data.every((r) => r.error && r.output === "Test error")
+            result.data.every((r: any) => r.error && r.output === "Test error")
         ).toEqual(true);
         const asyncThrowingFn = async () => {
             throw new Error("Test error");
@@ -288,7 +289,7 @@ describe("Chaos Engine", () => {
             .runAsync();
         expect(result).toHaveProperty("status", "success");
         expect(
-            result.data.every((r) => r.error && r.output === "Test error")
+            result.data.every((r: any) => r.error && r.output === "Test error")
         ).toEqual(true);
     });
 
@@ -318,5 +319,94 @@ describe("Chaos Engine", () => {
             (destructiveArgs.number.length + destructiveArgs.generals.length) *
                 2
         );
+    });
+
+    it("should report successful async calls as not errors", async () => {
+        const result = await new ChaosEngine(sumAsync)
+            .toTake(2)
+            .toTake(2)
+            .toReturn(4)
+            .runAsync();
+        // sumAsync never rejects, so no call is an error
+        expect(result.data!.every((r) => r.error === false)).toBe(true);
+        const numeric = result.data!.filter(
+            (r) => typeof r.output === "number"
+        );
+        expect(numeric.length).toBeGreaterThan(0);
+        expect(numeric.every((r) => r.matchedReturnType === true)).toBe(true);
+    });
+
+    it("should compare falsy expected returns such as 0 on both sync and async failures", async () => {
+        const fail = () => {
+            throw new Error("nope");
+        };
+        const asyncFail = async () => {
+            throw new Error("nope");
+        };
+        const sync = new ChaosEngine(fail)
+            .toTake(1)
+            .toReturn(0)
+            .run() as TestResults;
+        expect(sync.data!.every((r) => r.matchedReturnType === false)).toBe(
+            true
+        );
+        const asyncResult = await new ChaosEngine(asyncFail)
+            .toTake(1)
+            .toReturn(0)
+            .runAsync();
+        expect(
+            asyncResult.data!.every(
+                (r) => r.error && r.matchedReturnType === false
+            )
+        ).toBe(true);
+        const zero = new ChaosEngine(() => 0)
+            .toTake(1)
+            .toReturn(0)
+            .run() as TestResults;
+        expect(zero.data!.every((r) => r.matchedReturnType === true)).toBe(
+            true
+        );
+    });
+
+    it("should not call the function when it is set", () => {
+        const fn = jest.fn((a: number) => a);
+        const chaosEngine = new ChaosEngine(fn);
+        chaosEngine.setFn(fn);
+        expect(fn).not.toHaveBeenCalled();
+        chaosEngine.toTake(1).run();
+        expect(fn).toHaveBeenCalled();
+    });
+
+    it("should return a promise from run when a plain function returns a promise", async () => {
+        const promiseFn = (a: number) =>
+            a === -1
+                ? Promise.reject(new Error("negative"))
+                : Promise.resolve(a);
+        const pending = new ChaosEngine(promiseFn).toTake(1).run();
+        expect(pending).toBeInstanceOf(Promise);
+        const result = await pending;
+        expect(result.status).toBe("success");
+        const negative = result.data!.find((r) => r.inputs[0] === -1)!;
+        expect(negative).toMatchObject({ error: true, output: "negative" });
+        const infinite = result.data!.find((r) => r.inputs[0] === Infinity)!;
+        expect(infinite).toMatchObject({ error: false, output: Infinity });
+    });
+
+    it("should run synchronously for a sync function that throws without arguments", () => {
+        const needsArg = (a: number) => {
+            if (a === undefined) throw new Error("missing");
+            return a;
+        };
+        const result = new ChaosEngine(needsArg).toTake(1).run();
+        expect(result).not.toBeInstanceOf(Promise);
+        expect((result as TestResults).status).toBe("success");
+    });
+
+    it("should apply custom destructives inside object arguments", () => {
+        const fn = jest.fn((o: { a: { b: string } }) => o);
+        new ChaosEngine(fn, 0, { string: ["CUSTOM"] })
+            .toTake({ a: { b: "x" } })
+            .run();
+        expect(fn).toHaveBeenCalledWith({ a: { b: "CUSTOM" } });
     });
 });

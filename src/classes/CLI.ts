@@ -1,8 +1,33 @@
 import path from "path";
+import { inspect } from "util";
 import Table from "cli-table3";
 import Engine, { Result } from "./Engine";
-import { throwError } from "./Error";
+import { throwError, errorMessage } from "./Error";
 import { isValidObject } from "../helpers/utilities";
+
+/**
+ * Renders one table cell. JSON keeps strings quoted and spells out NaN,
+ * Infinity and undefined; values JSON cannot handle (circular structures,
+ * functions) fall back to util.inspect so one bad value cannot stop the
+ * whole table from printing.
+ */
+function formatCell(value: unknown): string {
+    let text: string | undefined;
+    try {
+        text = JSON.stringify(value, (_key, v: unknown) => {
+            if (typeof v === "number" && !Number.isFinite(v)) return String(v);
+            if (v === undefined) return "undefined";
+            if (typeof v === "bigint") return `${v}n`;
+            return v;
+        });
+    } catch {
+        text = undefined;
+    }
+    return (text ?? inspect(value, { depth: 2, breakLength: Infinity })).slice(
+        0,
+        80
+    );
+}
 
 interface Config {
     files: {
@@ -22,44 +47,32 @@ interface Config {
 }
 
 export default class CLI extends Engine {
-    private static CLI: CLI;
-
     private constructor(
         private readonly config: Config,
         private readonly configLocation = ""
     ) {
         super();
-        this.validateConfig();
-        this.startTests();
     }
 
     get files() {
         return this.config && this.config.files;
     }
 
-    private log(...args: any[]) {
+    private log(...args: unknown[]) {
         return console.log("\n", ...args);
     }
 
     private validateConfig() {
         if (!isValidObject(this.config)) throwError("Config is not an object");
-        this.setErrorLevel(this.config.errorLevel!);
-        this.setDestructives(this.config.destructives!);
         if (!isValidObject(this.files))
             throwError("Config Files property is not an object");
         this.log("Successfully validated configuration options");
     }
 
-    private async startTests(index = 0) {
-        // We're using recursive method instead of loops here so the promises and console logs are properly arranged
-        const filesKeys = Object.keys(this.files);
-        if (index < filesKeys.length) {
-            const name = filesKeys[index];
-            await this.testHandler({
-                name,
-                file: this.files[name]
-            });
-            this.startTests(index + 1);
+    private async startTests() {
+        // Files run one after another so their output does not interleave
+        for (const [name, file] of Object.entries(this.files)) {
+            await this.testHandler({ name, file });
         }
     }
 
@@ -69,49 +82,55 @@ export default class CLI extends Engine {
     }: {
         name: string;
         file: Config["files"]["x"];
-    }) {
+    }): Promise<void> {
         this.log(`Starting tests on ${path.basename(fileName).toUpperCase()}`);
-        let fn: Function;
+        // Until the file's own settings are applied, report with the global level
+        this.setErrorLevel(this.config.errorLevel ?? 0);
+        let fn: unknown;
         try {
             const configDir = path.dirname(this.configLocation);
             const fileLocation = path.resolve(configDir, fileName);
-            fn = require(fileLocation);
+            const mod = require(fileLocation);
+            // Accept `module.exports = fn` as well as a default export
+            fn = typeof mod === "function" ? mod : mod?.default;
         } catch (e) {
-            return this.sendError(
-                `Failed to import ${fileName}, \nCaught error: ${e.message}`
+            return void this.sendError(
+                `Failed to import ${fileName}, \nCaught error: ${errorMessage(e)}`
             );
         }
         if (typeof fn !== "function")
-            return this.sendError(
+            return void this.sendError(
                 `The file ${path.basename(fileName)} does not export a function`
             );
-        this.setFn(fn);
-
         if (!isValidObject(file))
-            return this.sendError(
+            return void this.sendError(
                 `The ${fileName} property in the config is not an object`
             );
-        if (file.errorLevel) this.setErrorLevel(file.errorLevel);
-        if (file.destructives) {
-            const result = { ...this.config.destructives },
-                destructives = file.destructives;
-            for (const each in destructives) {
-                const arr = destructives[each];
-                if (Array.isArray(arr))
-                    result[each] = [...arr, ...(result[each] || [])];
-                else
-                    this.sendError(
-                        `Expected an array for each destructive property, got '${JSON.stringify(
-                            arr
-                        )}'`
-                    );
-            }
-            this.setDestructives(result);
+
+        // setFn resets the engine, so the error level and destructives are
+        // applied after it: file settings first, then the global fallbacks.
+        this.setFn(fn);
+        this.setErrorLevel(file.errorLevel ?? this.config.errorLevel ?? 0);
+        const result: { [x: string]: unknown[] } = {
+            ...(this.config.destructives ?? {})
+        };
+        const destructives = file.destructives ?? {};
+        for (const each in destructives) {
+            const arr = destructives[each];
+            if (Array.isArray(arr))
+                result[each] = [...arr, ...(result[each] || [])];
+            else
+                this.sendError(
+                    `Expected an array for each destructive property, got '${JSON.stringify(
+                        arr
+                    )}'`
+                );
         }
+        this.setDestructives(result);
 
         const args = file.inputs;
         if (!args || !Array.isArray(args) || args.length < 1)
-            return this.sendError(
+            return void this.sendError(
                 `Invalid inputs passed in for file '${fileName}'`
             );
         for (const arg of args) {
@@ -119,21 +138,21 @@ export default class CLI extends Engine {
                 this.toTake(arg[0], arg[1]);
             else this.toTake(arg);
         }
-        if (file.output) {
+        if (file.output !== undefined) {
             const arg = file.output;
             if (Array.isArray(arg) && arg.length === 2)
                 this.toReturn(arg[0], arg[1]);
             else this.toReturn(arg);
         }
-        const result = await this.run();
-        if (result.data) {
-            const errorLogging = this.buildTable(result.data);
+        const outcome = await this.run();
+        if (outcome.data) {
+            const errorLogging = this.buildTable(outcome.data);
             if (errorLogging !== "")
                 this.sendError(
                     `Failed to log to table, \nCaught error: ${errorLogging}`
                 );
-        } else if (result.message) {
-            this.sendError(result.message);
+        } else if (outcome.message) {
+            this.sendError(outcome.message);
         }
     }
 
@@ -171,22 +190,7 @@ export default class CLI extends Engine {
                 Object.keys(result).forEach((entry) => {
                     //@ts-ignore
                     const value = result[entry];
-                    let jsonEntry = JSON.stringify(value, (key, value) => {
-                        if (value !== value) {
-                            return "NaN";
-                        }
-
-                        if (value === Infinity) {
-                            return "Infinity";
-                        }
-                        if (value === undefined) {
-                            return "undefined";
-                        }
-                        if (value === -Infinity) {
-                            return "-Infinity";
-                        }
-                        return value;
-                    }).slice(0, 80);
+                    let jsonEntry = formatCell(value);
                     if (entry.toLowerCase() === "output" && result.error) {
                         jsonEntry = `ERROR: ${jsonEntry}`;
                     }
@@ -198,19 +202,23 @@ export default class CLI extends Engine {
             this.log(table.toString());
             return "";
         } catch (e) {
-            return e.message;
+            return errorMessage(e);
         }
     }
 
-    static init(configLocation: string) {
+    /** Loads the config file and runs every file in it, in order. */
+    static async init(configLocation: string) {
+        let config: Config;
         try {
-            const config = require(path.resolve(configLocation));
-            this.CLI = new CLI(config, configLocation);
+            config = require(path.resolve(configLocation));
         } catch (e) {
-            throwError(
-                `Failed to parse config from ${configLocation}, \nCaught error: ${e.message}`,
-                e.stack
+            return throwError(
+                `Failed to parse config from ${configLocation}, \nCaught error: ${errorMessage(e)}`,
+                e instanceof Error ? e.stack : undefined
             );
         }
+        const cli = new CLI(config, configLocation);
+        cli.validateConfig();
+        await cli.startTests();
     }
 }
