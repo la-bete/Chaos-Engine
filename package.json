@@ -1,7 +1,7 @@
 {
     "name": "@la-bete/chaos-engine",
     "version": "1.1.4",
-    "description": "For running destructive tests on functions",
+    "description": "Call a function with edge-case inputs (NaN, Infinity, empty strings, wrong types) derived from example arguments, and report what breaks. Library and CLI.",
     "main": "./lib",
     "types": "./lib/index.d.ts",
     "devDependencies": {
@@ -29,7 +29,11 @@
         "destructive",
         "chaos",
         "engine",
-        "test"
+        "test",
+        "testing",
+        "edge-cases",
+        "fuzz",
+        "cli"
     ],
     "author": "La-BeTe",
     "license": "MIT",
