@@ -34,6 +34,10 @@ describe("CLI", () => {
             "module.exports = async (a, b) => { if (a === -1) throw new Error('neg'); return a + b; };"
         );
         write("esm.js", "exports.default = (a) => a;");
+        write(
+            "odd.js",
+            "module.exports = (n) => { const o = { n }; o.self = o; return n === null ? 10n : n === undefined ? () => n : o; };"
+        );
     });
 
     afterEach(() => {
@@ -110,5 +114,14 @@ describe("CLI", () => {
         await expect(CLI.init(writeConfig(`{ files: 1 }`))).rejects.toThrow(
             "Config Files property is not an object"
         );
+    });
+
+    it("prints a table even when outputs cannot be serialised as JSON", async () => {
+        const config = writeConfig(`{ files: { "odd.js": { inputs: [2] } } }`);
+        await expect(CLI.init(config)).resolves.toBeUndefined();
+        expect(output()).not.toContain("Failed to log to table");
+        expect(output()).toContain("[Circular");
+        expect(output()).toContain("10n");
+        expect(output()).toContain("[Function");
     });
 });

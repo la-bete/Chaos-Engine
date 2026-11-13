@@ -20,7 +20,7 @@
 
 - A CLI config without `errorLevel` or `destructives` no longer logs "Invalid error level" or fails validation at error level 0.
 - Type checks against an object shape return `false` for `null` or non-object values instead of throwing.
-- The CLI's result table no longer fails on values `JSON.stringify` cannot serialise, such as functions.
+- The CLI's result table no longer fails on values `JSON.stringify` cannot serialise (functions, `BigInt`, circular objects); those cells fall back to `util.inspect`.
 - `npm run build` works on a fresh install. The old `compile` script failed with current `@types/node` and deleted `lib/` first, so a publish would have shipped an empty package.
 
 ### Added

@@ -1,8 +1,33 @@
 import path from "path";
+import { inspect } from "util";
 import Table from "cli-table3";
 import Engine, { Result } from "./Engine";
 import { throwError, errorMessage } from "./Error";
 import { isValidObject } from "../helpers/utilities";
+
+/**
+ * Renders one table cell. JSON keeps strings quoted and spells out NaN,
+ * Infinity and undefined; values JSON cannot handle (circular structures,
+ * functions) fall back to util.inspect so one bad value cannot stop the
+ * whole table from printing.
+ */
+function formatCell(value: unknown): string {
+    let text: string | undefined;
+    try {
+        text = JSON.stringify(value, (_key, v: unknown) => {
+            if (typeof v === "number" && !Number.isFinite(v)) return String(v);
+            if (v === undefined) return "undefined";
+            if (typeof v === "bigint") return `${v}n`;
+            return v;
+        });
+    } catch {
+        text = undefined;
+    }
+    return (text ?? inspect(value, { depth: 2, breakLength: Infinity })).slice(
+        0,
+        80
+    );
+}
 
 interface Config {
     files: {
@@ -165,24 +190,7 @@ export default class CLI extends Engine {
                 Object.keys(result).forEach((entry) => {
                     //@ts-ignore
                     const value = result[entry];
-                    let jsonEntry = (
-                        JSON.stringify(value, (key, value) => {
-                            if (value !== value) {
-                                return "NaN";
-                            }
-
-                            if (value === Infinity) {
-                                return "Infinity";
-                            }
-                            if (value === undefined) {
-                                return "undefined";
-                            }
-                            if (value === -Infinity) {
-                                return "-Infinity";
-                            }
-                            return value;
-                        }) ?? String(value)
-                    ).slice(0, 80);
+                    let jsonEntry = formatCell(value);
                     if (entry.toLowerCase() === "output" && result.error) {
                         jsonEntry = `ERROR: ${jsonEntry}`;
                     }
