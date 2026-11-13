@@ -1,7 +1,6 @@
 # Chaos-Engine
 
 [![CI](https://github.com/la-bete/chaos-engine/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/la-bete/chaos-engine/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/la-bete/chaos-engine/branch/master/graph/badge.svg?token=npPIcAYD8F)](https://codecov.io/gh/la-bete/chaos-engine)
 
 A small edge-case testing library and CLI for JavaScript functions. You give it one example of each argument, and it calls the function again and again with each argument swapped for awkward values of the same type (`NaN`, `Infinity`, empty and whitespace strings, `null`, `undefined`, wrong types), then reports what each call returned, what threw, and how long it took. It is a quick way to see how a function behaves at the edges without writing those cases by hand.
 
@@ -112,3 +111,11 @@ The full API (`setFn`, `setErrorLevel`, `setDestructives`, `toTake`, `toReturn`,
 ## License
 
 MIT
+
+## Releasing
+
+1. Bump `version` in `package.json` (and add a `CHANGELOG.md` entry) in a pull request, and merge it.
+2. Publish a GitHub Release whose tag is that version with a `v` in front, e.g. `gh release create v1.2.3 --generate-notes`.
+3. The `Release` workflow checks the tag matches `package.json`, builds, tests and publishes to npm, with provenance.
+
+CI fails if test coverage drops below the floor set in `jest.config.js`; each CI run shows the coverage table in its summary.

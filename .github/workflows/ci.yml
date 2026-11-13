@@ -25,10 +25,6 @@ jobs:
             - run: npm run typecheck
             - run: npm run build
             - run: npm test
-            - name: Upload coverage to Codecov
-              if: matrix.node-version == 22
-              uses: codecov/codecov-action@v7
-              with:
-                  token: ${{ secrets.CODECOV_TOKEN }}
-                  files: ./coverage/lcov.info
-                  fail_ci_if_error: false
+            - name: Coverage summary
+              if: matrix.node-version == 22 && !cancelled()
+              run: node scripts/coverage-summary.js >> "$GITHUB_STEP_SUMMARY"

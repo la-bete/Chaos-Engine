@@ -6,5 +6,7 @@ module.exports = {
     testMatch: ["<rootDir>/tests/**/*.test.ts"],
     collectCoverageFrom: ["src/**/*.ts", "!src/cli.ts"],
     coverageDirectory: "coverage",
-    coverageReporters: ["text", "lcov"]
+    coverageReporters: ["text", "json-summary"],
+    // CI fails if coverage drops below these
+    coverageThreshold: { global: { statements: 90, branches: 80, functions: 95, lines: 90 } }
 };
