@@ -57,7 +57,7 @@ const result = chaos(sum)
 // { inputs, output, error, timeTaken, matchedReturnType }
 ```
 
-Async functions work too: `run()` detects them, or call `runAsync()` explicitly, which returns a promise of the same result.
+For async functions, call `runAsync()`, which returns a promise of the same result. `run()` can also hand off to it, but only if the function returned a promise when `setFn` called it once with no arguments, so `runAsync()` is the reliable choice. That probe call also means the function runs once with no arguments as soon as it is set.
 
 ## CLI
 

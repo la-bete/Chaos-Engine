@@ -92,8 +92,8 @@ chaosEngine.toTake({
  */
 ```
 
--   The `typeDeducer` function only deduces types for "string", "number", "boolean" and "object" as shown above.
--   If a particular type is not deducible, the `typeDeducer` returns "object" by default(which means only "object" and "generals" args would be passed when testing).
+-   Type deduction (internal to the Engine, not a public function) only covers "string", "number", "boolean" and "object" as shown above.
+-   If a type cannot be deduced (arrays, `null`, class instances), it falls back to "object" (which means only "object" and "generals" args would be passed when testing).
 -   You can add custom types by ensuring the custom type string is available as a key on the `destructives` property of the instance(which means you must have called `setDestructives` with an object containing the custom type as one of its keys).
 
 ### toReturn
@@ -102,7 +102,7 @@ The `toReturn` method accepts the same arguments as `toTake` method and specifie
 
 ### run
 
-The `run` method starts the process of testing and would throw an error if `toTake` had not been called initially. It returns the results of the destructive tests. You can call the `run` method after calling `toReturn` or `toTake` in order to run the tests. The `run` method also works for asynchronous functions but if you want to be explicit, use `runAsync` below
+The `run` method starts the process of testing and would throw an error if `toTake` had not been called initially. It returns the results of the destructive tests. You can call the `run` method after calling `toReturn` or `toTake` in order to run the tests. For asynchronous functions, use `runAsync` below. `run` hands off to `runAsync` only when the function returned a promise during the probe call that `setFn` makes (it calls the function once with no arguments), so do not rely on it for async functions.
 
 ### runAsync
 
