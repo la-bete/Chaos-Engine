@@ -27,7 +27,6 @@
 
 - The CLI accepts modules with a default export as well as `module.exports = fn`.
 - Exported types: `Options`, `Result`, `TestResults`, `UserDestructives`, `Engine`, and the `ChaosError` class.
-- `chaos --help`.
 
 ### Tooling
 
