@@ -1,7 +1,7 @@
 {
     "name": "@la-bete/chaos-engine",
     "version": "1.1.4",
-    "description": "For running destructive tests on functions",
+    "description": "Call a function with edge-case inputs (NaN, Infinity, empty strings, wrong types) derived from example arguments, and report what breaks. Library and CLI.",
     "main": "./lib",
     "types": "./lib/index.d.ts",
     "devDependencies": {
@@ -23,20 +23,24 @@
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/La-BeTe/Chaos-Engine.git"
+        "url": "git+https://github.com/la-bete/chaos-engine.git"
     },
     "keywords": [
         "destructive",
         "chaos",
         "engine",
-        "test"
+        "test",
+        "testing",
+        "edge-cases",
+        "fuzz",
+        "cli"
     ],
     "author": "La-BeTe",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/La-BeTe/Chaos-Engine/issues"
+        "url": "https://github.com/la-bete/chaos-engine/issues"
     },
-    "homepage": "https://github.com/La-BeTe/Chaos-Engine#readme",
+    "homepage": "https://github.com/la-bete/chaos-engine#readme",
     "files": [
         "lib"
     ],
