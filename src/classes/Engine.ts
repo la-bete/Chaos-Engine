@@ -1,6 +1,11 @@
 import generateArgs from "../helpers/generateArgs";
-import { throwError, returnError } from "./Error";
-import { destructiveArgs, isValidObject } from "../helpers/utilities";
+import { throwError, returnError, errorMessage } from "./Error";
+import {
+    destructiveArgs,
+    isThenable,
+    isValidObject,
+    UserDestructives
+} from "../helpers/utilities";
 
 export interface Result {
     matchedReturnType?: boolean;
@@ -10,7 +15,7 @@ export interface Result {
     inputs: unknown[];
 }
 
-interface TestResults {
+export interface TestResults {
     status: "success" | "error";
     message?: string;
     data?: Result[];
@@ -21,12 +26,11 @@ export default class Engine {
     private fnReturnType: unknown;
     private readonly fnArgs: unknown[] = [];
     private readonly destructiveArgs: Array<Array<unknown>> = [];
-    private isFnAsync = false;
 
     constructor(
         private _fn?: Function,
         private _errorLevel: 0 | 1 = 0,
-        private _userDestructives: { [x: string]: unknown[] } = {}
+        private _userDestructives: UserDestructives = {}
     ) {
         typeof _fn !== "undefined" && this.setFn(_fn);
         this.setErrorLevel(_errorLevel);
@@ -60,7 +64,7 @@ export default class Engine {
         return this._errorLevel;
     }
 
-    setDestructives(destructives: { [x: string]: unknown[] }) {
+    setDestructives(destructives: UserDestructives) {
         const result: { [x: string]: any[] } = {};
         if (!this.validateObject(destructives)) {
             this.sendError(
@@ -90,9 +94,6 @@ export default class Engine {
         else {
             this.refresh();
             this._fn = fn;
-            try {
-                this.isFnAsync = fn() instanceof Promise;
-            } catch (e) {}
         }
         return this;
     }
@@ -173,23 +174,31 @@ export default class Engine {
         return this;
     }
 
+    /**
+     * Runs every destructive call. Returns the results directly when every
+     * call returned synchronously, or a promise of them as soon as any call
+     * returned a promise (async functions always do).
+     */
     run(): TestResults | Promise<TestResults> {
         if (this.fnArgs.length === 0) {
             return this.sendError(
                 "You have to call ToTake method at least once before calling the Run method."
             );
         }
-        if (this.isFnAsync) {
-            return this.runAsync();
-        } else {
-            const results = this.startTesting(false) as Result[];
-            return {
-                status: "success",
-                data: results
-            };
+        const results = this.startTesting();
+        if (results.some(isThenable)) {
+            return Promise.all(results).then((data) => ({
+                status: "success" as const,
+                data
+            }));
         }
+        return {
+            status: "success",
+            data: results as Result[]
+        };
     }
 
+    /** Same as `run`, but always returns a promise. */
     async runAsync(): Promise<TestResults> {
         if (this.fnArgs.length === 0) {
             return this.sendError(
@@ -198,7 +207,7 @@ export default class Engine {
         }
         return {
             status: "success",
-            data: await this.startTesting(true)
+            data: await Promise.all(this.startTesting())
         };
     }
 
@@ -217,53 +226,36 @@ export default class Engine {
         return generateArgs(argType, argExample, this._userDestructives);
     }
 
-    private startTesting(shouldRunAsync: boolean) {
+    private startTesting() {
         const results: (Result | Promise<Result>)[] = [];
         for (let i = 0; i < this.destructiveArgs.length; i++) {
-            const destructiveArgs = [...this.destructiveArgs[i]];
-            for (let j = 0; j < destructiveArgs.length; j++) {
+            for (const destructiveArg of this.destructiveArgs[i]) {
                 const args = [...this.fnArgs];
-                args[i] = destructiveArgs[j];
-                const result = this.runTest(shouldRunAsync, ...args);
-                results.push(result);
+                args[i] = destructiveArg;
+                results.push(this.runTest(args));
             }
         }
-        if (!shouldRunAsync) {
-            return results as Result[];
-        } else {
-            return new Promise<Result[]>((resolve, reject) => {
-                Promise.all(results)
-                    .then((results) => {
-                        resolve(results);
-                    })
-                    .catch((err) => {
-                        reject(err.message);
-                    });
-            });
-        }
+        return results;
     }
 
-    private typeCheck(type: any, example: any) {
+    private typeCheck(type: any, example: any): boolean {
         if (typeof type === "undefined") return false;
         if (typeof type === "string") {
             if (type.includes("|")) {
-                const typeArr = type.split("|");
-                for (const forType of typeArr) {
-                    if (this.typeCheck(forType, example)) return true;
-                }
+                return type
+                    .split("|")
+                    .some((forType) => this.typeCheck(forType, example));
             } else {
                 type = type.trim();
-                const customEntryInUserDestructives =
-                    this.destructives && this.destructives[type];
                 const isAnUnknownType = !this.defaultDestructives[type];
                 return (
                     (isAnUnknownType &&
-                        customEntryInUserDestructives &&
-                        Array.isArray(customEntryInUserDestructives)) ||
+                        Array.isArray(this.destructives[type])) ||
                     typeof example === type
                 );
             }
         } else if (this.validateObject(type)) {
+            if (!this.validateObject(example)) return false;
             for (const prop in type) {
                 if (!this.typeCheck(type[prop], example[prop])) return false;
             }
@@ -289,71 +281,38 @@ export default class Engine {
         return type;
     }
 
-    private runTest(...args: unknown[]) {
-        let error: boolean, response: any;
-        const shouldRunAsync = args.shift();
-        if (shouldRunAsync) {
-            return new Promise<Result>((resolve) => {
-                const start = Date.now();
-                (this.fn as Function)(...args)
-                    .then((response: unknown) => {
-                        const end = Date.now();
-                        const result: { matchedReturnType?: boolean } = {};
-                        if (typeof this.fnReturnValue !== "undefined") {
-                            result.matchedReturnType = this.typeCheck(
-                                this.fnReturnType,
-                                response
-                            );
-                        }
-                        resolve({
-                            error: true,
-                            inputs: args,
-                            output: response,
-                            timeTaken: end - start + "ms",
-                            ...result
-                        });
-                    })
-                    .catch((err: Error) => {
-                        const end = Date.now();
-                        const result: { matchedReturnType?: boolean } = {};
-                        if (this.fnReturnValue) {
-                            result.matchedReturnType = false;
-                        }
-                        resolve({
-                            error: true,
-                            inputs: args,
-                            output: err.message,
-                            timeTaken: end - start + "ms",
-                            ...result
-                        });
-                    });
-            });
-        } else {
-            const start = Date.now();
-            try {
-                response = (this.fn as Function)(...args);
-                error = false;
-            } catch (e) {
-                error = true;
-                response = e.message;
-            }
-            const end = Date.now();
-            const result: { matchedReturnType?: boolean } = {};
-            if (typeof this.fnReturnValue !== "undefined") {
-                result.matchedReturnType = this.typeCheck(
-                    this.fnReturnType,
-                    response
-                );
-                if (error) result.matchedReturnType = false;
-            }
-            return {
+    private get expectsReturn() {
+        return typeof this.fnReturnType !== "undefined";
+    }
+
+    private runTest(args: unknown[]): Result | Promise<Result> {
+        const start = Date.now();
+        const finish = (error: boolean, output: unknown): Result => {
+            const result: Result = {
                 error,
                 inputs: args,
-                output: response,
-                timeTaken: end - start + "ms",
-                ...result
-            } as Result;
+                output,
+                timeTaken: Date.now() - start + "ms"
+            };
+            if (this.expectsReturn) {
+                result.matchedReturnType =
+                    !error && this.typeCheck(this.fnReturnType, output);
+            }
+            return result;
+        };
+        let response: unknown;
+        try {
+            response = (this.fn as Function)(...args);
+        } catch (e) {
+            return finish(true, errorMessage(e));
         }
+        if (isThenable(response)) {
+            return Promise.resolve(response).then(
+                (value) => finish(false, value),
+                (e: unknown) => finish(true, errorMessage(e))
+            );
+        }
+        return finish(false, response);
     }
 
     protected sendError(message: string) {
